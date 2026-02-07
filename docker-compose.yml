@@ -27,7 +27,7 @@ services:
       dockerfile: Dockerfile
     container_name: linkedin-backend
     environment:
-      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/linkedin_scheduler
+      DATABASE_URL: postgresql://postgres:${DB_PASSWORD}@postgres:5432/linkedin_post_scheduler
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-7d}
       GROQ_API_KEY: ${GROQ_API_KEY}
