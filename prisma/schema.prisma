@@ -14,6 +14,7 @@ model User {
   name             String?
   posts            Post[]
   linkedinAccounts LinkedinAccount[]
+  schedules        Schedule[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -36,19 +37,43 @@ model LinkedinAccount {
 }
 
 model Post {
-  id          String    @id @default(uuid())
-  content     String
-  category    String
-  scheduledAt DateTime?
-  status      String    @default("draft") // 'draft' | 'scheduled' | 'published' | 'failed'
-  publishedAt DateTime?
+  id             String    @id @default(uuid())
+  content        String
+  category       String
+  scheduledAt    DateTime?
+  status         String    @default("draft") // 'draft' | 'scheduled' | 'published' | 'failed'
+  publishedAt    DateTime?
   linkedinPostId String?
-  userId      String
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  scheduleId     String?   // Link to recurring schedule
+  schedule       Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
 
   @@index([userId])
   @@index([status])
   @@index([scheduledAt])
+  @@index([scheduleId])
+}
+
+model Schedule {
+  id          String   @id @default(uuid())
+  name        String
+  description String?  // Topic/description for AI generation
+  frequency   String   // 'daily' | 'weekly' | 'monthly' | 'custom'
+  interval    Int      @default(1) // For custom: post every X days
+  categories  String[] // Multiple categories
+  isActive    Boolean  @default(true)
+  lastRunAt   DateTime?
+  nextRunAt   DateTime
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  posts       Post[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([userId])
+  @@index([isActive])
+  @@index([nextRunAt])
 }

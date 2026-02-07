@@ -6,6 +6,7 @@ import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { PostsModule } from './posts/posts.module';
 import { LinkedinModule } from './linkedin/linkedin.module';
+import { ScheduleModule as CustomScheduleModule } from './schedule/schedule.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { LinkedinModule } from './linkedin/linkedin.module';
     UsersModule,
     PostsModule,
     LinkedinModule,
+    CustomScheduleModule,
   ],
 })
 export class AppModule {}

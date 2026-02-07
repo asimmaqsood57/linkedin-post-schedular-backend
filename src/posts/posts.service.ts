@@ -38,6 +38,25 @@ export class PostsService {
     };
   }
 
+  async generatePostWithDescription(category: string, description: string, userId: string) {
+    const prompt = `Generate a professional LinkedIn post about ${category}.
+    Topic/Focus: ${description}
+    Keep it engaging, informative, and between 100-200 words. 
+    Include relevant hashtags at the end.`;
+
+    const completion = await this.groq.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'llama-3.3-70b-versatile',
+    });
+
+    const content = completion.choices[0].message.content || '';
+
+    return {
+      content,
+      category,
+    };
+  }
+
   async createPost(createPostDto: CreatePostDto, userId: string) {
     return this.prisma.post.create({
       data: {
@@ -54,6 +73,13 @@ export class PostsService {
     return this.prisma.post.findMany({
       where: { userId },
       orderBy: { createdAt: 'desc' },
+      include: {
+        schedule: {
+          select: {
+            name: true,
+          },
+        },
+      },
     });
   }
 
