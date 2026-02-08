@@ -6,7 +6,7 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
   app.enableCors({
-    origin: 'http://localhost:3000',
+    origin: ['http://localhost:3000' , 'https://linkedin-post-schedular-frontend-9zgjxapzw.vercel.app'],
     credentials: true,
   });
   
