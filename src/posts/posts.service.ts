@@ -1,9 +1,10 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ConfigService } from '@nestjs/config';
 import Groq from 'groq-sdk';
 import { GeneratePostDto } from './dto/generate-post.dto';
 import { CreatePostDto } from './dto/create-post.dto';
+import { UpdatePostDto } from './dto/update-post.dto';
 
 @Injectable()
 export class PostsService {
@@ -19,11 +20,16 @@ export class PostsService {
   }
 
   async generatePost(generatePostDto: GeneratePostDto, userId: string) {
-    const { category } = generatePostDto;
+    const { category, instructions } = generatePostDto;
 
-    const prompt = `Generate a professional LinkedIn post about ${category}. 
-    Keep it engaging, informative, and between 100-200 words. 
-    Include relevant hashtags at the end.`;
+    const prompt = instructions
+      ? `Generate a professional LinkedIn post about ${category}.
+       User instructions: ${instructions}
+       Keep it engaging, informative, and between 100-200 words.
+       Include relevant hashtags at the end.`
+      : `Generate a professional LinkedIn post about ${category}.
+       Keep it engaging, informative, and between 100-200 words.
+       Include relevant hashtags at the end.`;
 
     const completion = await this.groq.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
@@ -32,13 +38,14 @@ export class PostsService {
 
     const content = completion.choices[0].message.content || '';
 
-    return {
-      content,
-      category,
-    };
+    return { content, category };
   }
 
-  async generatePostWithDescription(category: string, description: string, userId: string) {
+  async generatePostWithDescription(
+    category: string,
+    description: string,
+    userId: string,
+  ) {
     const prompt = `Generate a professional LinkedIn post about ${category}.
     Topic/Focus: ${description}
     Keep it engaging, informative, and between 100-200 words. 
@@ -62,7 +69,9 @@ export class PostsService {
       data: {
         content: createPostDto.content,
         category: createPostDto.category,
-        scheduledAt: createPostDto.scheduledAt ? new Date(createPostDto.scheduledAt) : null,
+        scheduledAt: createPostDto.scheduledAt
+          ? new Date(createPostDto.scheduledAt)
+          : null,
         status: createPostDto.status || 'draft',
         userId,
       },
@@ -82,6 +91,42 @@ export class PostsService {
       },
     });
   }
+
+  async findOne(id: string, userId: string) {
+    const post = await this.prisma.post.findFirst({
+      where: { id, userId },
+      include: {
+        schedule: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    });
+
+    if (!post) {
+      throw new NotFoundException(`Post not found`);
+    }
+
+    return post;
+  }
+
+
+  async update(id: string, updatePostDto: UpdatePostDto, userId: string) {
+  const post = await this.prisma.post.findFirst({ where: { id, userId } });
+  if (!post) throw new NotFoundException('Post not found');
+
+  return this.prisma.post.update({
+    where: { id },
+    data: {
+      ...(updatePostDto.content && { content: updatePostDto.content }),
+      ...(updatePostDto.category && { category: updatePostDto.category }),
+      scheduledAt: updatePostDto.scheduledAt
+        ? new Date(updatePostDto.scheduledAt)
+        : undefined,
+    },
+  });
+}
 
   async delete(id: string, userId: string) {
     return this.prisma.post.delete({
