@@ -12,11 +12,10 @@ export class LinkedinService {
 
   getAuthUrl(userId: string): string {
     const clientId = this.configService.get<string>('LINKEDIN_CLIENT_ID') || '';
-    const redirectUri = this.configService.get<string>('LINKEDIN_REDIRECT_URI') || '';
+    const redirectUri =
+      this.configService.get<string>('LINKEDIN_REDIRECT_URI') || '';
     const state = Buffer.from(JSON.stringify({ userId })).toString('base64');
-    
     const scope = 'openid profile email w_member_social';
-    
     return `https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${state}&scope=${encodeURIComponent(scope)}`;
   }
 
@@ -24,40 +23,45 @@ export class LinkedinService {
     try {
       const { userId } = JSON.parse(Buffer.from(state, 'base64').toString());
 
-      // Exchange code for access token
       const tokenResponse = await axios.post(
         'https://www.linkedin.com/oauth/v2/accessToken',
         new URLSearchParams({
           grant_type: 'authorization_code',
           code,
-          client_id: this.configService.get<string>('LINKEDIN_CLIENT_ID') || '',
-          client_secret: this.configService.get<string>('LINKEDIN_CLIENT_SECRET') || '',
-          redirect_uri: this.configService.get<string>('LINKEDIN_REDIRECT_URI') || '',
+          client_id:
+            this.configService.get<string>('LINKEDIN_CLIENT_ID') || '',
+          client_secret:
+            this.configService.get<string>('LINKEDIN_CLIENT_SECRET') || '',
+          redirect_uri:
+            this.configService.get<string>('LINKEDIN_REDIRECT_URI') || '',
         }),
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        },
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
       );
 
       const { access_token, refresh_token, expires_in } = tokenResponse.data;
 
-      // Get LinkedIn profile
-      const profileResponse = await axios.get('https://api.linkedin.com/v2/userinfo', {
-        headers: { Authorization: `Bearer ${access_token}` },
-      });
+      const profileResponse = await axios.get(
+        'https://api.linkedin.com/v2/userinfo',
+        {
+          headers: { Authorization: `Bearer ${access_token}` },
+        },
+      );
 
       const profile = profileResponse.data;
+      const resolvedName = this.resolveName(profile);
 
-      // Save LinkedIn account
+      console.log('[LinkedIn] Profile data:', JSON.stringify(profile));
+      console.log('[LinkedIn] Resolved name:', resolvedName);
+
       await this.prisma.linkedinAccount.upsert({
         where: { linkedinId: profile.sub },
         update: {
           accessToken: access_token,
           refreshToken: refresh_token,
           expiresAt: new Date(Date.now() + expires_in * 1000),
-          name: profile.name,
-          email: profile.email,
-          profileUrl: profile.picture,
+          name: resolvedName,
+          email: profile.email || null,
+          profileUrl: profile.picture || null,
         },
         create: {
           userId,
@@ -65,17 +69,44 @@ export class LinkedinService {
           accessToken: access_token,
           refreshToken: refresh_token,
           expiresAt: new Date(Date.now() + expires_in * 1000),
-          name: profile.name,
-          email: profile.email,
-          profileUrl: profile.picture,
+          name: resolvedName,
+          email: profile.email || null,
+          profileUrl: profile.picture || null,
         },
       });
 
       return { success: true };
     } catch (error) {
-      console.error('LinkedIn callback error:', error.response?.data || error.message);
+      console.error(
+        'LinkedIn callback error:',
+        error.response?.data || error.message,
+      );
       throw new UnauthorizedException('Failed to connect LinkedIn account');
     }
+  }
+
+  private resolveName(profile: any): string | null {
+    // Try full name first — ensure it doesn't contain "undefined"
+    if (
+      profile.name &&
+      !profile.name.includes('undefined') &&
+      profile.name.trim()
+    ) {
+      return profile.name.trim();
+    }
+    // Try given + family name
+    if (profile.given_name || profile.family_name) {
+      const combined = [profile.given_name, profile.family_name]
+        .filter(Boolean)
+        .join(' ')
+        .trim();
+      if (combined) return combined;
+    }
+    // Fall back to email username
+    if (profile.email) {
+      return profile.email.split('@')[0];
+    }
+    return null;
   }
 
   async getLinkedInAccount(userId: string) {
@@ -92,23 +123,17 @@ export class LinkedinService {
   }
 
   async disconnectLinkedIn(userId: string) {
-    await this.prisma.linkedinAccount.deleteMany({
-      where: { userId },
-    });
+    await this.prisma.linkedinAccount.deleteMany({ where: { userId } });
     return { success: true };
   }
 
   async publishPost(postId: string, userId: string) {
-    // Get post
     const post = await this.prisma.post.findFirst({
       where: { id: postId, userId },
     });
 
-    if (!post) {
-      throw new Error('Post not found');
-    }
+    if (!post) throw new Error('Post not found');
 
-    // Get LinkedIn account
     const linkedinAccount = await this.prisma.linkedinAccount.findFirst({
       where: { userId },
     });
@@ -118,7 +143,6 @@ export class LinkedinService {
     }
 
     try {
-      // Create post on LinkedIn
       const response = await axios.post(
         'https://api.linkedin.com/v2/ugcPosts',
         {
@@ -126,9 +150,7 @@ export class LinkedinService {
           lifecycleState: 'PUBLISHED',
           specificContent: {
             'com.linkedin.ugc.ShareContent': {
-              shareCommentary: {
-                text: post.content,
-              },
+              shareCommentary: { text: post.content },
               shareMediaCategory: 'NONE',
             },
           },
@@ -145,7 +167,6 @@ export class LinkedinService {
         },
       );
 
-      // Update post status
       await this.prisma.post.update({
         where: { id: postId },
         data: {
@@ -157,14 +178,14 @@ export class LinkedinService {
 
       return { success: true, linkedinPostId: response.data.id };
     } catch (error) {
-      console.error('LinkedIn publish error:', error.response?.data || error.message);
-      
-      // Update post status to failed
+      console.error(
+        'LinkedIn publish error:',
+        error.response?.data || error.message,
+      );
       await this.prisma.post.update({
         where: { id: postId },
         data: { status: 'failed' },
       });
-
       throw new Error('Failed to publish to LinkedIn');
     }
   }

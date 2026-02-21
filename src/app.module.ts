@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module';
 import { PostsModule } from './posts/posts.module';
 import { LinkedinModule } from './linkedin/linkedin.module';
 import { ScheduleModule as CustomScheduleModule } from './schedule/schedule.module';
+import { JobsModule } from './jobs/jobs.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { ScheduleModule as CustomScheduleModule } from './schedule/schedule.modu
     PostsModule,
     LinkedinModule,
     CustomScheduleModule,
+    JobsModule,
   ],
 })
 export class AppModule {}

@@ -15,6 +15,8 @@ model User {
   posts            Post[]
   linkedinAccounts LinkedinAccount[]
   schedules        Schedule[]
+  profile          UserProfile?
+  savedJobs        SavedJob[]
   createdAt        DateTime          @default(now())
   updatedAt        DateTime          @updatedAt
 }
@@ -41,10 +43,10 @@ model Post {
   content        String
   category       String
   scheduledAt    DateTime?
-  status         String    @default("draft") // 'draft' | 'scheduled' | 'published' | 'failed'
+  status         String    @default("draft")
   publishedAt    DateTime?
   linkedinPostId String?
-  scheduleId     String?   // Link to recurring schedule
+  scheduleId     String?
   schedule       Schedule? @relation(fields: [scheduleId], references: [id], onDelete: SetNull)
   userId         String
   user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -58,22 +60,79 @@ model Post {
 }
 
 model Schedule {
-  id          String   @id @default(uuid())
+  id          String    @id @default(uuid())
   name        String
-  description String?  // Topic/description for AI generation
-  frequency   String   // 'daily' | 'weekly' | 'monthly' | 'custom'
-  interval    Int      @default(1) // For custom: post every X days
-  categories  String[] // Multiple categories
-  isActive    Boolean  @default(true)
+  description String?
+  frequency   String
+  interval    Int       @default(1)
+  categories  String[]
+  isActive    Boolean   @default(true)
   lastRunAt   DateTime?
   nextRunAt   DateTime
   userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   posts       Post[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
 
   @@index([userId])
   @@index([isActive])
   @@index([nextRunAt])
+}
+
+model UserProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // ── LinkedIn / manual bio ──────────────────────────────────
+  linkedinBio    String?
+
+  // ── CV file storage ────────────────────────────────────────
+  cvS3Key        String?
+  cvFileName     String?
+  cvMimeType     String?
+  cvEditableText String?  // extracted/editable full CV text
+
+  // ── AI-extracted personal info ─────────────────────────────
+  fullName       String?
+  email          String?
+  phone          String?
+  location       String?
+  jobTitle       String?
+
+  // ── AI-extracted profile data ──────────────────────────────
+  profileSummary String?
+  skills         String[]
+  certifications String[]
+  languages      String[]
+
+  // ── AI-extracted structured sections (stored as JSON) ─────
+  experience     Json?    // [{ title, company, duration, description }]
+  education      Json?    // [{ degree, institution, year }]
+
+  // ── CV quality scoring ─────────────────────────────────────
+  cvScore        Int?
+  cvFeedback     String[] // array of improvement tips
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model SavedJob {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  externalId String
+  title      String
+  company    String
+  location   String?
+  description String
+  url        String
+  salary     String?
+  platform   String   @default("adzuna")
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, externalId])
+  @@index([userId])
 }
